@@ -1,0 +1,1 @@
+/Users/yanga2/Desktop/code/easy-invest/.claude/skills/gstack/plan-design-review/SKILL.md

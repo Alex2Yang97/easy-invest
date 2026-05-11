@@ -1,0 +1,1 @@
+/Users/yanga2/Desktop/code/easy-invest/.claude/skills/gstack/setup-gbrain/SKILL.md
