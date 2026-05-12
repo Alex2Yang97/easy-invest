@@ -13,15 +13,21 @@ import {
 } from "recharts";
 import type { DcaDailyPoint, DcaTransaction } from "@/lib/dca";
 import { formatDate, formatUSD } from "@/lib/format";
+import { t, type Locale } from "@/lib/i18n";
 
 type Props = {
+  locale: Locale;
   daily: DcaDailyPoint[];
   transactions: DcaTransaction[];
   gainPositive: boolean;
 };
 
-export function GrowthChart({ daily, transactions, gainPositive }: Props) {
-  // Sample to keep the chart light: target ~600 points
+export function GrowthChart({
+  locale,
+  daily,
+  transactions,
+  gainPositive,
+}: Props) {
   const stride = Math.max(1, Math.floor(daily.length / 600));
   const sampled: Array<{
     date: string;
@@ -36,7 +42,6 @@ export function GrowthChart({ daily, transactions, gainPositive }: Props) {
       contributed: Math.round(p.contributed),
     });
   }
-  // Ensure last point is included
   const lastDaily = daily[daily.length - 1];
   if (sampled[sampled.length - 1]?.date !== lastDaily.date) {
     sampled.push({
@@ -46,9 +51,9 @@ export function GrowthChart({ daily, transactions, gainPositive }: Props) {
     });
   }
 
-  const buys = transactions.map((t) => ({
-    date: t.date,
-    buyValue: Math.round(t.valueAfter),
+  const buys = transactions.map((tx) => ({
+    date: tx.date,
+    buyValue: Math.round(tx.valueAfter),
   }));
 
   const merged: Array<{
@@ -113,7 +118,7 @@ export function GrowthChart({ daily, transactions, gainPositive }: Props) {
             width={56}
           />
           <Tooltip
-            content={<ChartTooltip />}
+            content={<ChartTooltip locale={locale} />}
             cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }}
           />
           <Area
@@ -149,10 +154,12 @@ export function GrowthChart({ daily, transactions, gainPositive }: Props) {
 }
 
 function ChartTooltip({
+  locale,
   active,
   payload,
   label,
 }: {
+  locale: Locale;
   active?: boolean;
   payload?: Array<{ name: string; value: number; dataKey: string }>;
   label?: string;
@@ -161,16 +168,17 @@ function ChartTooltip({
   const value = payload.find((p) => p.dataKey === "value")?.value;
   const contributed = payload.find((p) => p.dataKey === "contributed")?.value;
   const buy = payload.find((p) => p.dataKey === "buyValue")?.value;
-  const dateLabel = label ? formatDate(label) : null;
+  const dateLabel = label ? formatDate(label, locale) : "";
   if (value == null || contributed == null) {
     if (buy != null && dateLabel) {
       return (
         <div className="rounded-lg border border-line bg-card px-3 py-2 text-xs shadow-sm tabular">
-          <div className="font-semibold mb-1">
-            {dateLabel.zh}
-            <span className="text-muted font-normal"> · {dateLabel.en}</span>
-          </div>
-          <Row label="本月买入 / Buy day" value={formatUSD(buy)} bold />
+          <div className="font-semibold mb-1">{dateLabel}</div>
+          <Row
+            label={t(locale, "chart.tooltip.buyDay")}
+            value={formatUSD(buy)}
+            bold
+          />
         </div>
       );
     }
@@ -180,21 +188,28 @@ function ChartTooltip({
   const gainPct = contributed > 0 ? gain / contributed : 0;
   return (
     <div className="rounded-lg border border-line bg-card px-3 py-2 text-xs shadow-sm tabular">
-      <div className="font-semibold mb-1">
-        {dateLabel?.zh ?? label}
-        {dateLabel && (
-          <span className="text-muted font-normal"> · {dateLabel.en}</span>
-        )}
-      </div>
-      <Row label="持仓 / Value" value={formatUSD(value)} bold />
-      <Row label="投入 / Invested" value={formatUSD(contributed)} muted />
+      <div className="font-semibold mb-1">{dateLabel}</div>
       <Row
-        label="盈亏 / P&L"
+        label={t(locale, "chart.tooltip.value")}
+        value={formatUSD(value)}
+        bold
+      />
+      <Row
+        label={t(locale, "chart.tooltip.invested")}
+        value={formatUSD(contributed)}
+        muted
+      />
+      <Row
+        label={t(locale, "chart.tooltip.pnl")}
         value={`${formatUSD(gain)} (${gain >= 0 ? "+" : ""}${(gainPct * 100).toFixed(1)}%)`}
         color={gain >= 0 ? "var(--accent)" : "var(--loss)"}
       />
       {buy != null && (
-        <Row label="本月买入 / Bought" value="✓" muted />
+        <Row
+          label={t(locale, "chart.tooltip.bought")}
+          value={t(locale, "chart.tooltip.bought.yes")}
+          muted
+        />
       )}
     </div>
   );

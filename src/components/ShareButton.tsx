@@ -1,8 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { t, type Locale } from "@/lib/i18n";
 
-export function ShareButton() {
+type Props = {
+  locale: Locale;
+};
+
+export function ShareButton({ locale }: Props) {
   const [state, setState] = useState<"idle" | "copied">("idle");
 
   async function onClick() {
@@ -10,7 +15,10 @@ export function ShareButton() {
     const url = window.location.href;
     try {
       if (navigator.share) {
-        await navigator.share({ url, title: "我的定投回测 / My DCA backtest" });
+        await navigator.share({
+          url,
+          title: t(locale, "share.shareTitle"),
+        });
         return;
       }
     } catch {
@@ -21,7 +29,7 @@ export function ShareButton() {
       setState("copied");
       setTimeout(() => setState("idle"), 1800);
     } catch {
-      window.prompt("复制链接 / Copy link", url);
+      window.prompt(t(locale, "share.label"), url);
     }
   }
 
@@ -33,12 +41,12 @@ export function ShareButton() {
       {state === "copied" ? (
         <>
           <span>✓</span>
-          <span>已复制 / Copied</span>
+          <span>{t(locale, "share.copied")}</span>
         </>
       ) : (
         <>
           <ShareIcon />
-          <span>分享链接 / Share</span>
+          <span>{t(locale, "share.label")}</span>
         </>
       )}
     </button>

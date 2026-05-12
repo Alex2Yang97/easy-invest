@@ -1,3 +1,5 @@
+import type { Locale } from "./i18n";
+
 export type Preset = {
   ticker: string;
   nameZh: string;
@@ -60,4 +62,12 @@ export const PRESETS: Preset[] = [
 
 export function findPreset(ticker: string): Preset | undefined {
   return PRESETS.find((p) => p.ticker.toUpperCase() === ticker.toUpperCase());
+}
+
+export function presetName(p: Preset, locale: Locale): string {
+  return locale === "zh" ? p.nameZh : p.nameEn;
+}
+
+export function presetDesc(p: Preset, locale: Locale): string {
+  return locale === "zh" ? p.descZh : p.descEn;
 }

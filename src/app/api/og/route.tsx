@@ -1,8 +1,9 @@
 import { ImageResponse } from "next/og";
 import { simulateDca } from "@/lib/dca";
 import { formatPercent, formatUSD } from "@/lib/format";
+import { isLocale, t, DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import { parseParams } from "@/lib/params";
-import { findPreset } from "@/lib/presets";
+import { findPreset, presetName } from "@/lib/presets";
 import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const runtime = "nodejs";
@@ -12,18 +13,45 @@ export async function GET(req: Request) {
   const sp: Record<string, string> = {};
   url.searchParams.forEach((v, k) => (sp[k] = v));
 
+  const langRaw = sp.lang;
+  const locale: Locale = isLocale(langRaw) ? langRaw : DEFAULT_LOCALE;
+
   const parsed = parseParams(sp);
-  if (!parsed.ok) return errorCard("Invalid input", parsed.error);
+  if (!parsed.ok) {
+    return errorCard(
+      t(locale, "error.params.title"),
+      t(locale, parsed.errorKey),
+    );
+  }
 
   const { ticker, start, amount } = parsed.data;
   const history = await fetchDailyHistory(ticker, start);
-  if (!history.ok) return errorCard("Data unavailable", history.error);
+  if (!history.ok) {
+    return errorCard(
+      t(locale, "error.fetch.title"),
+      t(locale, history.errorKey, history.errorParams),
+    );
+  }
 
   const summary = simulateDca(history.points, amount, history.latestPrice);
   const preset = findPreset(ticker);
-  const assetEn = preset?.nameEn ?? history.nameLong ?? ticker;
+  const assetName = preset
+    ? presetName(preset, locale)
+    : history.nameLong ?? ticker;
   const gainPositive = summary.gain >= 0;
   const accent = gainPositive ? "#047857" : "#be123c";
+
+  const tagline = t(locale, "brand.tagline");
+  const headline =
+    locale === "zh"
+      ? `每月 ${formatUSD(amount)} 投 ${assetName}，自 ${start}`
+      : `${formatUSD(amount)}/mo into ${assetName} since ${start}`;
+  const investedLabel =
+    locale === "zh"
+      ? `累计投入 ${formatUSD(summary.totalContributed)} · 共 ${summary.months} 个月`
+      : `Invested ${formatUSD(summary.totalContributed)} over ${summary.months} months`;
+  const gainText = `${gainPositive ? "+" : ""}${formatUSD(summary.gain)}`;
+  const detailText = `(${formatPercent(summary.totalReturnPct)} · ${formatPercent(summary.cagr)} CAGR)`;
 
   return new ImageResponse(
     (
@@ -57,7 +85,7 @@ export async function GET(req: Request) {
             <div
               style={{ fontSize: 22, color: "#6b6f7a", letterSpacing: 0.5 }}
             >
-              easy-invest · DCA backtest
+              {`easy-invest · ${tagline}`}
             </div>
           </div>
           <div
@@ -84,7 +112,7 @@ export async function GET(req: Request) {
           }}
         >
           <div style={{ display: "flex", fontSize: 26, color: "#6b6f7a" }}>
-            {`$${amount}/mo into ${assetEn} since ${start}`}
+            {headline}
           </div>
           <div
             style={{
@@ -115,12 +143,8 @@ export async function GET(req: Request) {
               fontSize: 30,
             }}
           >
-            <span style={{ color: accent, fontWeight: 600 }}>
-              {`${gainPositive ? "+" : ""}${formatUSD(summary.gain)}`}
-            </span>
-            <span style={{ color: "#6b6f7a" }}>
-              {`(${formatPercent(summary.totalReturnPct)} · ${formatPercent(summary.cagr)} CAGR)`}
-            </span>
+            <span style={{ color: accent, fontWeight: 600 }}>{gainText}</span>
+            <span style={{ color: "#6b6f7a" }}>{detailText}</span>
           </div>
         </div>
 
@@ -135,9 +159,7 @@ export async function GET(req: Request) {
             paddingTop: 22,
           }}
         >
-          <div style={{ display: "flex" }}>
-            {`Invested ${formatUSD(summary.totalContributed)} over ${summary.months} months`}
-          </div>
+          <div style={{ display: "flex" }}>{investedLabel}</div>
           <div style={{ fontWeight: 600, color: "#0c111c" }}>
             easy-invest.app
           </div>

@@ -10,6 +10,12 @@ export type DailyPoint = {
   close: number;
 };
 
+export type HistoryError = {
+  ok: false;
+  errorKey: string;
+  errorParams?: Record<string, string>;
+};
+
 export type HistoryResult =
   | {
       ok: true;
@@ -19,7 +25,7 @@ export type HistoryResult =
       latestPrice?: number;
       latestDate?: string;
     }
-  | { ok: false; error: string };
+  | HistoryError;
 
 function isoDate(d: Date): string {
   const y = d.getUTCFullYear();
@@ -37,13 +43,13 @@ export async function fetchDailyHistory(
   const y = parseInt(yStr, 10);
   const m = parseInt(mStr, 10);
   if (!Number.isFinite(y) || !Number.isFinite(m)) {
-    return { ok: false, error: "起始月份格式错误" };
+    return { ok: false, errorKey: "error.invalidMonth" };
   }
 
   const period1 = new Date(Date.UTC(y, m - 1, 1));
   const now = new Date();
   if (period1 > now) {
-    return { ok: false, error: "起始月份不能在未来" };
+    return { ok: false, errorKey: "error.futureMonth" };
   }
 
   try {
@@ -67,7 +73,8 @@ export async function fetchDailyHistory(
     if (points.length < 20) {
       return {
         ok: false,
-        error: `「${symbol}」在 ${startMonth} 之后没有足够的历史数据`,
+        errorKey: "error.notEnoughData",
+        errorParams: { ticker: symbol, start: startMonth },
       };
     }
 
@@ -86,8 +93,16 @@ export async function fetchDailyHistory(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/Not Found|not found|HTTP 404/i.test(msg)) {
-      return { ok: false, error: `找不到代码「${symbol}」，请检查` };
+      return {
+        ok: false,
+        errorKey: "error.notFound",
+        errorParams: { ticker: symbol },
+      };
     }
-    return { ok: false, error: `数据获取失败: ${msg.slice(0, 120)}` };
+    return {
+      ok: false,
+      errorKey: "error.fetchFailed",
+      errorParams: { msg: msg.slice(0, 120) },
+    };
   }
 }

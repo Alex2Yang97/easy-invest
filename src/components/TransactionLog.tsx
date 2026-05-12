@@ -2,19 +2,17 @@
 
 import { Fragment, useState } from "react";
 import type { DcaTransaction } from "@/lib/dca";
-import {
-  formatDate,
-  formatShares,
-  formatUSD,
-} from "@/lib/format";
+import { formatDate, formatShares, formatUSD } from "@/lib/format";
+import { t, type Locale } from "@/lib/i18n";
 
 type Props = {
+  locale: Locale;
   transactions: DcaTransaction[];
 };
 
 const INITIAL_LIMIT = 12;
 
-export function TransactionLog({ transactions }: Props) {
+export function TransactionLog({ locale, transactions }: Props) {
   const [expanded, setExpanded] = useState(false);
   const total = transactions.length;
   const showAll = expanded || total <= INITIAL_LIMIT;
@@ -33,28 +31,27 @@ export function TransactionLog({ transactions }: Props) {
           <thead>
             <tr className="text-[11px] text-muted text-left">
               <th className="font-medium px-2 py-2">
-                日期 <span className="opacity-60">/ Date</span>
+                {t(locale, "result.txns.col.date")}
               </th>
               <th className="font-medium px-2 py-2 text-right">
-                成交价 <span className="opacity-60">/ Price</span>
+                {t(locale, "result.txns.col.price")}
               </th>
               <th className="font-medium px-2 py-2 text-right">
-                买入股数 <span className="opacity-60">/ Shares</span>
+                {t(locale, "result.txns.col.shares")}
               </th>
               <th className="font-medium px-2 py-2 text-right hidden sm:table-cell">
-                累计股数 <span className="opacity-60">/ Cum.</span>
+                {t(locale, "result.txns.col.cumShares")}
               </th>
               <th className="font-medium px-2 py-2 text-right">
-                持仓价值 <span className="opacity-60">/ Value</span>
+                {t(locale, "result.txns.col.value")}
               </th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((t, i) => {
+            {visible.map((tx, i) => {
               const isElision = i === elidedAt;
-              const date = formatDate(t.date);
               return (
-                <Fragment key={t.date}>
+                <Fragment key={tx.date}>
                   {isElision && (
                     <tr className="text-muted">
                       <td colSpan={5} className="px-2 py-2 text-center">
@@ -63,30 +60,26 @@ export function TransactionLog({ transactions }: Props) {
                           onClick={() => setExpanded(true)}
                           className="text-[11px] hover:text-foreground transition"
                         >
-                          展开剩余 {total - INITIAL_LIMIT} 笔 / Show{" "}
-                          {total - INITIAL_LIMIT} more ↓
+                          {t(locale, "result.txns.expand", {
+                            n: total - INITIAL_LIMIT,
+                          })}
                         </button>
                       </td>
                     </tr>
                   )}
-                  <tr
-                    className="border-t border-line/60 hover:bg-foreground/[0.02] transition"
-                  >
-                    <td className="px-2 py-2">
-                      <div>{date.zh}</div>
-                      <div className="text-[10.5px] text-muted">{date.en}</div>
+                  <tr className="border-t border-line/60 hover:bg-foreground/[0.02] transition">
+                    <td className="px-2 py-2">{formatDate(tx.date, locale)}</td>
+                    <td className="px-2 py-2 text-right">
+                      {formatUSD(tx.price)}
                     </td>
                     <td className="px-2 py-2 text-right">
-                      {formatUSD(t.price)}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {formatShares(t.sharesBought)}
+                      {formatShares(tx.sharesBought)}
                     </td>
                     <td className="px-2 py-2 text-right hidden sm:table-cell text-muted">
-                      {formatShares(t.cumulativeShares)}
+                      {formatShares(tx.cumulativeShares)}
                     </td>
                     <td className="px-2 py-2 text-right font-medium">
-                      {formatUSD(t.valueAfter)}
+                      {formatUSD(tx.valueAfter)}
                     </td>
                   </tr>
                 </Fragment>
@@ -102,7 +95,7 @@ export function TransactionLog({ transactions }: Props) {
             onClick={() => setExpanded(false)}
             className="text-[11px] text-muted hover:text-foreground transition"
           >
-            收起 / Collapse ↑
+            {t(locale, "result.txns.collapse")}
           </button>
         </div>
       )}

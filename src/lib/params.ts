@@ -9,15 +9,20 @@ export const BacktestParams = z.object({
     .min(1)
     .max(15)
     .transform((v) => v.toUpperCase()),
-  start: z.string().regex(monthRe, "格式应为 YYYY-MM"),
+  start: z.string().regex(monthRe),
   amount: z.coerce.number().positive().max(1_000_000),
 });
 
 export type BacktestParamsT = z.infer<typeof BacktestParams>;
 
+export type ParamsErrorKey =
+  | "error.params.ticker"
+  | "error.params.start"
+  | "error.params.amount";
+
 export function parseParams(sp: Record<string, string | string[] | undefined>):
   | { ok: true; data: BacktestParamsT }
-  | { ok: false; error: string } {
+  | { ok: false; errorKey: ParamsErrorKey } {
   const raw = {
     ticker: typeof sp.ticker === "string" ? sp.ticker : "",
     start: typeof sp.start === "string" ? sp.start : "",
@@ -25,7 +30,10 @@ export function parseParams(sp: Record<string, string | string[] | undefined>):
   };
   const parsed = BacktestParams.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "参数错误" };
+    const field = parsed.error.issues[0]?.path[0];
+    if (field === "ticker") return { ok: false, errorKey: "error.params.ticker" };
+    if (field === "start") return { ok: false, errorKey: "error.params.start" };
+    return { ok: false, errorKey: "error.params.amount" };
   }
   return { ok: true, data: parsed.data };
 }
