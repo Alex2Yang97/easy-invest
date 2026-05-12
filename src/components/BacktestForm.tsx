@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { PRESETS } from "@/lib/presets";
 
 type Props = {
@@ -11,6 +11,8 @@ type Props = {
   compact?: boolean;
 };
 
+const AMOUNT_CHIPS = [100, 500, 1000, 2000];
+
 export function BacktestForm({
   defaultTicker = "SPY",
   defaultStart = "2015-01",
@@ -18,35 +20,35 @@ export function BacktestForm({
   compact = false,
 }: Props) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [ticker, setTicker] = useState(defaultTicker);
   const [customTicker, setCustomTicker] = useState(
     PRESETS.some((p) => p.ticker === defaultTicker) ? "" : defaultTicker,
   );
   const [start, setStart] = useState(defaultStart);
   const [amount, setAmount] = useState(String(defaultAmount));
-  const [pending, setPending] = useState(false);
 
   const isCustom = !PRESETS.some((p) => p.ticker === ticker);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setPending(true);
     const finalTicker = (isCustom ? customTicker : ticker).trim().toUpperCase();
-    if (!finalTicker) {
-      setPending(false);
-      return;
-    }
+    if (!finalTicker) return;
+    const amt = Math.max(1, Number(amount) || 0);
     const q = new URLSearchParams({
       ticker: finalTicker,
       start,
-      amount: String(Number(amount) || 0),
+      amount: String(amt),
     });
-    router.push(`/backtest?${q.toString()}`);
+    startTransition(() => {
+      router.push(`/backtest?${q.toString()}`);
+    });
   }
 
   const thisYear = new Date().getFullYear();
   const years = Array.from({ length: thisYear - 1990 + 1 }, (_, i) => 1990 + i);
   const [startY, startM] = start.split("-");
+  const amountNum = Number(amount) || 0;
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-7">
@@ -131,8 +133,8 @@ export function BacktestForm({
         <Field
           labelZh="起始月份"
           labelEn="Start month"
-          helpZh="从这个月开始定投"
-          helpEn="When you'd have started"
+          helpZh="每月第一个交易日买入"
+          helpEn="Buys on the 1st trading day each month"
         >
           <div className="flex gap-2">
             <select
@@ -163,8 +165,8 @@ export function BacktestForm({
         <Field
           labelZh="月投金额"
           labelEn="Monthly amount"
-          helpZh="每月定投美元金额"
-          helpEn="USD per month"
+          helpZh="每月定投美元金额，任意正数"
+          helpEn="USD per month, any positive number"
         >
           <div className="relative">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted">
@@ -175,11 +177,30 @@ export function BacktestForm({
               inputMode="decimal"
               min={1}
               max={1000000}
-              step={50}
+              step={1}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full rounded-xl border border-line bg-card pl-8 pr-4 py-3 text-[15px] tabular outline-none focus:border-foreground/60"
             />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {AMOUNT_CHIPS.map((chip) => {
+              const active = amountNum === chip;
+              return (
+                <button
+                  type="button"
+                  key={chip}
+                  onClick={() => setAmount(String(chip))}
+                  className={`rounded-md border px-2.5 py-1 text-[11px] tabular transition ${
+                    active
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-line bg-card text-muted hover:border-foreground/40 hover:text-foreground"
+                  }`}
+                >
+                  ${chip}
+                </button>
+              );
+            })}
           </div>
         </Field>
       </div>
@@ -189,7 +210,11 @@ export function BacktestForm({
         disabled={pending}
         className="mt-2 inline-flex items-center justify-center rounded-xl bg-foreground px-6 py-3.5 text-[15px] font-semibold text-background transition hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "计算中… / Crunching…" : compact ? "重新计算 / Recompute" : "看回测 / See backtest →"}
+        {pending
+          ? "计算中… / Crunching…"
+          : compact
+            ? "重新计算 / Recompute"
+            : "看回测 / See backtest →"}
       </button>
     </form>
   );

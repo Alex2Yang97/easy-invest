@@ -3,16 +3,18 @@ import type { Metadata } from "next";
 import { BacktestForm } from "@/components/BacktestForm";
 import { GrowthChart } from "@/components/GrowthChart";
 import { ShareButton } from "@/components/ShareButton";
-import { simulateDca } from "@/lib/dca";
+import { TransactionLog } from "@/components/TransactionLog";
+import { simulateDca, type DcaNextBuy } from "@/lib/dca";
 import {
-  formatMonth,
+  formatDate,
   formatMultiple,
   formatPercent,
+  formatShares,
   formatUSD,
 } from "@/lib/format";
 import { parseParams } from "@/lib/params";
 import { findPreset } from "@/lib/presets";
-import { fetchMonthlyHistory } from "@/lib/yahoo";
+import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 3600;
@@ -59,7 +61,7 @@ export default async function BacktestPage({
   }
   const { ticker, start, amount } = parsed.data;
 
-  const history = await fetchMonthlyHistory(ticker, start);
+  const history = await fetchDailyHistory(ticker, start);
   if (!history.ok) {
     return (
       <ErrorView
@@ -72,12 +74,12 @@ export default async function BacktestPage({
     );
   }
 
-  const summary = simulateDca(history.points, amount);
+  const summary = simulateDca(history.points, amount, history.latestPrice);
   const preset = findPreset(ticker);
   const assetNameZh = preset?.nameZh ?? history.nameLong ?? ticker;
   const assetNameEn = preset?.nameEn ?? history.nameLong ?? ticker;
-  const startLabel = formatMonth(summary.startMonth);
-  const endLabel = formatMonth(summary.endMonth);
+  const startLabel = formatDate(summary.startDate);
+  const endLabel = formatDate(summary.endDate);
   const gainPositive = summary.gain >= 0;
   const accentClass = gainPositive ? "text-accent" : "text-loss";
 
@@ -152,7 +154,8 @@ export default async function BacktestPage({
             <Stat
               labelZh="持仓份额"
               labelEn="Shares"
-              value={summary.finalShares.toFixed(3)}
+              value={formatShares(summary.finalShares)}
+              sub={`@ ${formatUSD(summary.finalClose)}`}
             />
             <Stat
               labelZh="持有月数"
@@ -169,9 +172,37 @@ export default async function BacktestPage({
           </div>
 
           <div className="mt-7 -mx-2 sm:mx-0">
-            <GrowthChart series={summary.series} gainPositive={gainPositive} />
+            <GrowthChart
+              daily={summary.daily}
+              transactions={summary.transactions}
+              gainPositive={gainPositive}
+            />
           </div>
           <Legend />
+        </section>
+
+        {summary.nextBuy && (
+          <NextDcaCard
+            nextBuy={summary.nextBuy}
+            ticker={ticker}
+            assetNameZh={assetNameZh}
+            latestDate={history.latestDate}
+          />
+        )}
+
+        <section className="mt-8 rounded-2xl border border-line bg-card p-5 sm:p-7">
+          <div className="flex items-baseline justify-between gap-3 mb-4">
+            <h2 className="text-[13px] font-semibold tracking-wide">
+              每月交易明细{" "}
+              <span className="text-muted font-normal">
+                / Monthly transactions
+              </span>
+            </h2>
+            <span className="text-[11px] text-muted tabular">
+              {summary.transactions.length} 笔 / txns
+            </span>
+          </div>
+          <TransactionLog transactions={summary.transactions} />
         </section>
 
         <section className="mt-8 rounded-2xl border border-line bg-card/70 p-5 sm:p-7">
@@ -189,12 +220,12 @@ export default async function BacktestPage({
 
         <footer className="mt-10 text-[11px] text-muted leading-relaxed">
           <p>
-            数据源：Yahoo Finance 月度调整后收盘价（含分红再投）。每月 1
-            日按当月收盘价买入。
+            数据源：Yahoo Finance
+            日度调整后收盘价（含分红再投）。每月首个交易日按当日收盘价买入。
           </p>
           <p className="opacity-80 mt-1">
-            Data: Yahoo Finance adjusted monthly closes (dividends reinvested).
-            Each contribution buys at that month&apos;s close.
+            Data: Yahoo Finance adjusted daily closes (dividends reinvested).
+            Each contribution buys at the 1st trading day&apos;s close.
           </p>
           <p className="mt-3">
             ⚠️ 仅供历史回顾，不构成任何投资建议。Past performance does not
@@ -237,7 +268,7 @@ function Stat({
 
 function Legend() {
   return (
-    <div className="mt-3 flex items-center gap-4 text-[11px] text-muted">
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block h-[2px] w-4 rounded bg-accent" />
         持仓价值 / Portfolio value
@@ -246,7 +277,70 @@ function Legend() {
         <span className="inline-block h-[2px] w-4 border-t-2 border-dashed border-muted" />
         累计投入 / Cumulative invested
       </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block size-1.5 rounded-full bg-accent" />
+        买入日 / Buy day
+      </span>
     </div>
+  );
+}
+
+function NextDcaCard({
+  nextBuy,
+  ticker,
+  assetNameZh,
+  latestDate,
+}: {
+  nextBuy: DcaNextBuy;
+  ticker: string;
+  assetNameZh: string;
+  latestDate?: string;
+}) {
+  const nextLabel = formatDate(nextBuy.date);
+  const priceLabel = latestDate
+    ? `${formatDate(latestDate).zh} 收盘`
+    : "最新收盘";
+  const priceLabelEn = latestDate
+    ? `${formatDate(latestDate).en} close`
+    : "latest close";
+  return (
+    <section className="mt-8 rounded-2xl border border-accent/30 bg-accent-soft/40 p-5 sm:p-7">
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="inline-block size-1.5 rounded-full bg-accent" />
+        <h2 className="text-[13px] font-semibold tracking-wide">
+          下一次定投{" "}
+          <span className="text-muted font-normal">/ Next DCA</span>
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <Stat
+          labelZh="预计买入日"
+          labelEn="Estimated date"
+          value={nextLabel.zh}
+          sub={nextLabel.en}
+        />
+        <Stat
+          labelZh="本次投入"
+          labelEn="Amount"
+          value={formatUSD(nextBuy.monthlyAmount)}
+          sub={`买入 ${assetNameZh} / Buy ${ticker}`}
+        />
+        <Stat
+          labelZh="预计买入股数"
+          labelEn="Est. shares"
+          value={`${formatShares(nextBuy.estimatedShares)}`}
+          sub={`@ ${formatUSD(nextBuy.estimatedPrice)} · ${priceLabelEn}`}
+        />
+      </div>
+      <p className="mt-4 text-[11px] text-muted leading-snug">
+        按 {priceLabel} {formatUSD(nextBuy.estimatedPrice)}{" "}
+        估算；实际成交价以当日收盘为准。
+        <span className="opacity-80 block">
+          Estimate based on {priceLabelEn}; actual fill at that day&apos;s
+          close.
+        </span>
+      </p>
+    </section>
   );
 }
 

@@ -5,22 +5,30 @@ const yf = new YahooFinance({
   suppressNotices: ["yahooSurvey", "ripHistorical"],
 });
 
-export type MonthlyPoint = {
-  month: string;
+export type DailyPoint = {
+  date: string;
   close: number;
 };
 
 export type HistoryResult =
-  | { ok: true; ticker: string; points: MonthlyPoint[]; nameLong?: string }
+  | {
+      ok: true;
+      ticker: string;
+      points: DailyPoint[];
+      nameLong?: string;
+      latestPrice?: number;
+      latestDate?: string;
+    }
   | { ok: false; error: string };
 
-function ym(d: Date): string {
+function isoDate(d: Date): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-export async function fetchMonthlyHistory(
+export async function fetchDailyHistory(
   ticker: string,
   startMonth: string,
 ): Promise<HistoryResult> {
@@ -43,31 +51,37 @@ export async function fetchMonthlyHistory(
       yf.chart(symbol, {
         period1,
         period2: now,
-        interval: "1mo",
+        interval: "1d",
       }),
       yf.quote(symbol).catch(() => null),
     ]);
 
     const quotes = chart.quotes ?? [];
-    const points: MonthlyPoint[] = [];
+    const points: DailyPoint[] = [];
     for (const q of quotes) {
       const close = q.adjclose ?? q.close;
       if (close == null || !q.date) continue;
-      points.push({ month: ym(new Date(q.date)), close });
+      points.push({ date: isoDate(new Date(q.date)), close });
     }
 
-    if (points.length < 2) {
+    if (points.length < 20) {
       return {
         ok: false,
         error: `「${symbol}」在 ${startMonth} 之后没有足够的历史数据`,
       };
     }
 
+    const last = points[points.length - 1];
+    const latestPrice =
+      quote?.regularMarketPrice ?? quote?.postMarketPrice ?? last.close;
+
     return {
       ok: true,
       ticker: symbol,
       points,
       nameLong: quote?.longName ?? quote?.shortName ?? undefined,
+      latestPrice,
+      latestDate: last.date,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -33,3 +33,27 @@ export function formatMonth(yyyyMm: string): { zh: string; en: string } {
     }),
   };
 }
+
+export function formatDate(isoDay: string): { zh: string; en: string } {
+  const [y, m, d] = isoDay.split("-").map((s) => parseInt(s, 10));
+  const date = new Date(y, m - 1, d);
+  return {
+    zh: `${y} 年 ${m} 月 ${d} 日`,
+    en: date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+  };
+}
+
+export function formatDateShort(isoDay: string): string {
+  const [y, m, d] = isoDay.split("-");
+  return `${y}-${m}-${d}`;
+}
+
+export function formatShares(n: number): string {
+  if (n >= 100) return n.toFixed(2);
+  if (n >= 1) return n.toFixed(3);
+  return n.toFixed(4);
+}

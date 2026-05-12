@@ -3,7 +3,7 @@ import { simulateDca } from "@/lib/dca";
 import { formatPercent, formatUSD } from "@/lib/format";
 import { parseParams } from "@/lib/params";
 import { findPreset } from "@/lib/presets";
-import { fetchMonthlyHistory } from "@/lib/yahoo";
+import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const runtime = "nodejs";
 
@@ -16,10 +16,10 @@ export async function GET(req: Request) {
   if (!parsed.ok) return errorCard("Invalid input", parsed.error);
 
   const { ticker, start, amount } = parsed.data;
-  const history = await fetchMonthlyHistory(ticker, start);
+  const history = await fetchDailyHistory(ticker, start);
   if (!history.ok) return errorCard("Data unavailable", history.error);
 
-  const summary = simulateDca(history.points, amount);
+  const summary = simulateDca(history.points, amount, history.latestPrice);
   const preset = findPreset(ticker);
   const assetEn = preset?.nameEn ?? history.nameLong ?? ticker;
   const gainPositive = summary.gain >= 0;
