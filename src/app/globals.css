@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #fbfaf6;
   --foreground: #0c111c;
@@ -10,6 +12,18 @@
   --accent-soft: #d1fae5;
   --loss: #be123c;
   --loss-soft: #ffe4e6;
+}
+
+.dark {
+  --background: #0b0d12;
+  --foreground: #f4f1e8;
+  --muted: #8a8e98;
+  --line: #1f232c;
+  --card: #14171e;
+  --accent: #34d399;
+  --accent-soft: #064e3b;
+  --loss: #fb7185;
+  --loss-soft: #4c0519;
 }
 
 @theme inline {
@@ -24,20 +38,6 @@
   --color-loss-soft: var(--loss-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b0d12;
-    --foreground: #f4f1e8;
-    --muted: #8a8e98;
-    --line: #1f232c;
-    --card: #14171e;
-    --accent: #34d399;
-    --accent-soft: #064e3b;
-    --loss: #fb7185;
-    --loss-soft: #4c0519;
-  }
 }
 
 html,

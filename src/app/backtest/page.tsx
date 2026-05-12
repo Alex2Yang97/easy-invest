@@ -3,16 +3,20 @@ import type { Metadata } from "next";
 import { BacktestForm } from "@/components/BacktestForm";
 import { GrowthChart } from "@/components/GrowthChart";
 import { ShareButton } from "@/components/ShareButton";
-import { simulateDca } from "@/lib/dca";
+import { TransactionLog } from "@/components/TransactionLog";
+import { simulateDca, type DcaNextBuy } from "@/lib/dca";
 import {
-  formatMonth,
+  formatDate,
   formatMultiple,
   formatPercent,
+  formatShares,
   formatUSD,
 } from "@/lib/format";
+import { t, type Locale } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale.server";
 import { parseParams } from "@/lib/params";
-import { findPreset } from "@/lib/presets";
-import { fetchMonthlyHistory } from "@/lib/yahoo";
+import { findPreset, presetName } from "@/lib/presets";
+import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 3600;
@@ -25,18 +29,31 @@ export async function generateMetadata({
   searchParams: SearchParams;
 }): Promise<Metadata> {
   const sp = await searchParams;
+  const locale = await getLocale();
   const parsed = parseParams(sp);
-  if (!parsed.ok) return { title: "回测 / Backtest · easy-invest" };
+  if (!parsed.ok) return { title: t(locale, "meta.title") };
   const { ticker, start, amount } = parsed.data;
+  const amountStr = formatUSD(amount);
   const ogUrl = `/api/og?ticker=${encodeURIComponent(
     ticker,
-  )}&start=${start}&amount=${amount}`;
+  )}&start=${start}&amount=${amount}&lang=${locale}`;
   return {
-    title: `${ticker} 从 ${start} 起月投 $${amount} · easy-invest`,
-    description: `如果你从 ${start} 开始每月定投 $${amount} 到 ${ticker}，今天会有多少？看个人化历史回测结果。`,
+    title: t(locale, "meta.backtest.title", {
+      ticker,
+      start,
+      amount: amountStr,
+    }),
+    description: t(locale, "meta.backtest.description", {
+      ticker,
+      start,
+      amount: amountStr,
+    }),
     openGraph: {
-      title: `${ticker} 定投回测 / DCA backtest`,
-      description: `从 ${start} 起每月 $${amount}`,
+      title: t(locale, "meta.og.title", { ticker }),
+      description: t(locale, "meta.og.description", {
+        start,
+        amount: amountStr,
+      }),
       images: [{ url: ogUrl, width: 1200, height: 630 }],
     },
     twitter: {
@@ -52,19 +69,27 @@ export default async function BacktestPage({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
+  const locale = await getLocale();
   const parsed = parseParams(sp);
 
   if (!parsed.ok) {
-    return <ErrorView title="参数错误 / Invalid input" detail={parsed.error} />;
+    return (
+      <ErrorView
+        locale={locale}
+        title={t(locale, "error.params.title")}
+        detail={t(locale, parsed.errorKey)}
+      />
+    );
   }
   const { ticker, start, amount } = parsed.data;
 
-  const history = await fetchMonthlyHistory(ticker, start);
+  const history = await fetchDailyHistory(ticker, start);
   if (!history.ok) {
     return (
       <ErrorView
-        title="拉取数据失败 / Couldn't fetch data"
-        detail={history.error}
+        locale={locale}
+        title={t(locale, "error.fetch.title")}
+        detail={t(locale, history.errorKey, history.errorParams)}
         ticker={ticker}
         start={start}
         amount={amount}
@@ -72,12 +97,13 @@ export default async function BacktestPage({
     );
   }
 
-  const summary = simulateDca(history.points, amount);
+  const summary = simulateDca(history.points, amount, history.latestPrice);
   const preset = findPreset(ticker);
-  const assetNameZh = preset?.nameZh ?? history.nameLong ?? ticker;
-  const assetNameEn = preset?.nameEn ?? history.nameLong ?? ticker;
-  const startLabel = formatMonth(summary.startMonth);
-  const endLabel = formatMonth(summary.endMonth);
+  const assetName = preset
+    ? presetName(preset, locale)
+    : history.nameLong ?? ticker;
+  const startLabel = formatDate(summary.startDate, locale);
+  const endLabel = formatDate(summary.endDate, locale);
   const gainPositive = summary.gain >= 0;
   const accentClass = gainPositive ? "text-accent" : "text-loss";
 
@@ -90,9 +116,9 @@ export default async function BacktestPage({
             className="text-[13px] text-muted hover:text-foreground transition inline-flex items-center gap-1.5"
           >
             <span>←</span>
-            <span>easy-invest</span>
+            <span>{t(locale, "nav.back")}</span>
           </Link>
-          <ShareButton />
+          <ShareButton locale={locale} />
         </nav>
 
         <header className="mb-8">
@@ -101,31 +127,21 @@ export default async function BacktestPage({
               {ticker}
             </span>
             <span className="text-[13px] text-muted">
-              {startLabel.zh} → {endLabel.zh}
-              <span className="opacity-60">
-                {" · "}
-                {startLabel.en} → {endLabel.en}
-              </span>
+              {startLabel} → {endLabel}
             </span>
           </div>
           <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
-            如果你从 {startLabel.zh}起，
-            <br />
-            <span>每月定投 </span>
-            <span className="tabular">{formatUSD(amount)}</span>
-            <span> 到 </span>
-            <span>{assetNameZh}</span>
-            <span>…</span>
+            {t(locale, "result.title", {
+              date: startLabel,
+              amount: formatUSD(amount),
+              asset: assetName,
+            })}
           </h1>
-          <p className="mt-1.5 text-[13px] text-muted">
-            If you DCA&apos;d {formatUSD(amount)}/mo into {assetNameEn} starting{" "}
-            {startLabel.en}…
-          </p>
         </header>
 
         <section className="rounded-2xl border border-line bg-card p-6 sm:p-8 shadow-[0_1px_2px_rgba(0,0,0,0.02),0_8px_24px_-12px_rgba(0,0,0,0.08)]">
           <div className="text-[12px] text-muted mb-2">
-            今天你的账户里有 / You&apos;d have today
+            {t(locale, "result.youdHave")}
           </div>
           <div
             className={`text-5xl sm:text-6xl font-bold tracking-tight tabular ${accentClass}`}
@@ -145,41 +161,71 @@ export default async function BacktestPage({
 
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
             <Stat
-              labelZh="总投入"
-              labelEn="Invested"
+              label={t(locale, "result.stat.invested")}
               value={formatUSD(summary.totalContributed)}
             />
             <Stat
-              labelZh="持仓份额"
-              labelEn="Shares"
-              value={summary.finalShares.toFixed(3)}
+              label={t(locale, "result.stat.shares")}
+              value={formatShares(summary.finalShares)}
+              sub={`@ ${formatUSD(summary.finalClose)}`}
             />
             <Stat
-              labelZh="持有月数"
-              labelEn="Months"
+              label={t(locale, "result.stat.months")}
               value={`${summary.months}`}
-              sub={`${(summary.months / 12).toFixed(1)} 年 / yr`}
+              sub={t(locale, "result.stat.monthsSub", {
+                years: (summary.months / 12).toFixed(1),
+              })}
             />
             <Stat
-              labelZh="年化收益"
-              labelEn="CAGR"
+              label={t(locale, "result.stat.cagr")}
               value={formatPercent(summary.cagr)}
               valueClass={accentClass}
             />
           </div>
 
           <div className="mt-7 -mx-2 sm:mx-0">
-            <GrowthChart series={summary.series} gainPositive={gainPositive} />
+            <GrowthChart
+              locale={locale}
+              daily={summary.daily}
+              transactions={summary.transactions}
+              gainPositive={gainPositive}
+            />
           </div>
-          <Legend />
+          <Legend locale={locale} />
+        </section>
+
+        {summary.nextBuy && (
+          <NextDcaCard
+            locale={locale}
+            nextBuy={summary.nextBuy}
+            assetName={assetName}
+            latestDate={history.latestDate}
+          />
+        )}
+
+        <section className="mt-8 rounded-2xl border border-line bg-card p-5 sm:p-7">
+          <div className="flex items-baseline justify-between gap-3 mb-4">
+            <h2 className="text-[13px] font-semibold tracking-wide">
+              {t(locale, "result.txns.section")}
+            </h2>
+            <span className="text-[11px] text-muted tabular">
+              {t(locale, "result.txns.count", {
+                n: summary.transactions.length,
+              })}
+            </span>
+          </div>
+          <TransactionLog
+            locale={locale}
+            transactions={summary.transactions}
+          />
         </section>
 
         <section className="mt-8 rounded-2xl border border-line bg-card/70 p-5 sm:p-7">
           <h2 className="text-[13px] font-semibold mb-4 tracking-wide">
-            换个参数试试{" "}
-            <span className="text-muted font-normal">/ Tweak parameters</span>
+            {t(locale, "result.tweakSection")}
           </h2>
           <BacktestForm
+            locale={locale}
             defaultTicker={ticker}
             defaultStart={start}
             defaultAmount={amount}
@@ -188,18 +234,8 @@ export default async function BacktestPage({
         </section>
 
         <footer className="mt-10 text-[11px] text-muted leading-relaxed">
-          <p>
-            数据源：Yahoo Finance 月度调整后收盘价（含分红再投）。每月 1
-            日按当月收盘价买入。
-          </p>
-          <p className="opacity-80 mt-1">
-            Data: Yahoo Finance adjusted monthly closes (dividends reinvested).
-            Each contribution buys at that month&apos;s close.
-          </p>
-          <p className="mt-3">
-            ⚠️ 仅供历史回顾，不构成任何投资建议。Past performance does not
-            guarantee future results.
-          </p>
+          <p>{t(locale, "result.footer.dataSource")}</p>
+          <p className="mt-3">{t(locale, "result.footer.disclaimer")}</p>
         </footer>
       </main>
     </div>
@@ -207,24 +243,19 @@ export default async function BacktestPage({
 }
 
 function Stat({
-  labelZh,
-  labelEn,
+  label,
   value,
   sub,
   valueClass,
 }: {
-  labelZh: string;
-  labelEn: string;
+  label: string;
   value: string;
   sub?: string;
   valueClass?: string;
 }) {
   return (
     <div>
-      <div className="text-[11px] text-muted leading-tight">
-        {labelZh}
-        <span className="opacity-70"> / {labelEn}</span>
-      </div>
+      <div className="text-[11px] text-muted leading-tight">{label}</div>
       <div
         className={`mt-1 text-lg sm:text-xl font-semibold tabular ${valueClass ?? ""}`}
       >
@@ -235,28 +266,79 @@ function Stat({
   );
 }
 
-function Legend() {
+function Legend({ locale }: { locale: Locale }) {
   return (
-    <div className="mt-3 flex items-center gap-4 text-[11px] text-muted">
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block h-[2px] w-4 rounded bg-accent" />
-        持仓价值 / Portfolio value
+        {t(locale, "result.legend.value")}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block h-[2px] w-4 border-t-2 border-dashed border-muted" />
-        累计投入 / Cumulative invested
+        {t(locale, "result.legend.invested")}
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block size-1.5 rounded-full bg-accent" />
+        {t(locale, "result.legend.buy")}
       </span>
     </div>
   );
 }
 
+function NextDcaCard({
+  locale,
+  nextBuy,
+  assetName,
+  latestDate,
+}: {
+  locale: Locale;
+  nextBuy: DcaNextBuy;
+  assetName: string;
+  latestDate?: string;
+}) {
+  const nextLabel = formatDate(nextBuy.date, locale);
+  const priceLabel = latestDate ? formatDate(latestDate, locale) : "";
+  const priceFmt = formatUSD(nextBuy.estimatedPrice);
+  return (
+    <section className="mt-8 rounded-2xl border border-accent/30 bg-accent-soft/40 p-5 sm:p-7">
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="inline-block size-1.5 rounded-full bg-accent" />
+        <h2 className="text-[13px] font-semibold tracking-wide">
+          {t(locale, "next.section")}
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <Stat label={t(locale, "next.estDate")} value={nextLabel} />
+        <Stat
+          label={t(locale, "next.amount")}
+          value={formatUSD(nextBuy.monthlyAmount)}
+          sub={t(locale, "next.amountSub", { asset: assetName })}
+        />
+        <Stat
+          label={t(locale, "next.estShares")}
+          value={formatShares(nextBuy.estimatedShares)}
+          sub={t(locale, "next.estSharesSub", {
+            price: priceFmt,
+            dateLabel: priceLabel,
+          })}
+        />
+      </div>
+      <p className="mt-4 text-[11px] text-muted leading-snug">
+        {t(locale, "next.note", { price: priceFmt, dateLabel: priceLabel })}
+      </p>
+    </section>
+  );
+}
+
 function ErrorView({
+  locale,
   title,
   detail,
   ticker,
   start,
   amount,
 }: {
+  locale: Locale;
   title: string;
   detail: string;
   ticker?: string;
@@ -272,7 +354,7 @@ function ErrorView({
             className="text-[13px] text-muted hover:text-foreground transition inline-flex items-center gap-1.5"
           >
             <span>←</span>
-            <span>easy-invest</span>
+            <span>{t(locale, "nav.back")}</span>
           </Link>
         </nav>
         <div className="rounded-2xl border border-loss/30 bg-loss-soft/30 p-6">
@@ -281,9 +363,10 @@ function ErrorView({
         </div>
         <div className="mt-8 rounded-2xl border border-line bg-card p-5 sm:p-7">
           <h2 className="text-[13px] font-semibold mb-4 tracking-wide">
-            重新输入 <span className="text-muted font-normal">/ Try again</span>
+            {t(locale, "error.tryAgain")}
           </h2>
           <BacktestForm
+            locale={locale}
             defaultTicker={ticker ?? "SPY"}
             defaultStart={start ?? "2015-01"}
             defaultAmount={amount ?? 500}

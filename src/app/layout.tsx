@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { t } from "@/lib/i18n";
+import { getLocale, getTheme } from "@/lib/locale.server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,23 +22,42 @@ const notoSC = Noto_Sans_SC({
   weight: ["400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: "如果当年… · easy-invest",
-  description:
-    "如果当年你每月定投 $500 到标普 500，今天会有多少？输入金额、起始月份和标的，立即查看个人化定投回测。 What if you DCA'd into the S&P 500? See your personalized backtest in seconds.",
-  metadataBase: new URL("https://easy-invest.app"),
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  return {
+    title: t(locale, "meta.title"),
+    description: t(locale, "meta.description"),
+    metadataBase: new URL("https://easy-invest.app"),
+  };
+}
 
-export default function RootLayout({
+// Runs before paint to apply the user's chosen theme (or system pref).
+// Avoids a light-flash-on-dark-system load.
+const themeBootstrap = `(function(){try{
+  var m=document.cookie.match(/(?:^|;\\s*)theme=(system|light|dark)/);
+  var t=m?m[1]:'system';
+  var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if(dark)document.documentElement.classList.add('dark');
+}catch(e){}})();`;
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const theme = await getTheme();
+  const htmlLang = locale === "zh" ? "zh-CN" : "en";
+
   return (
     <html
-      lang="zh-CN"
+      lang={htmlLang}
       className={`${geistSans.variable} ${geistMono.variable} ${notoSC.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body
         className="min-h-full flex flex-col"
         style={{
@@ -42,6 +65,12 @@ export default function RootLayout({
             "var(--font-geist-sans), var(--font-noto-sc), -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
         }}
       >
+        <header className="sticky top-0 z-10 backdrop-blur-md bg-background/70 border-b border-line/60">
+          <div className="mx-auto w-full max-w-3xl px-5 sm:px-8 h-12 flex items-center justify-end gap-2">
+            <LocaleSwitch locale={locale} />
+            <ThemeSwitch locale={locale} initialTheme={theme} />
+          </div>
+        </header>
         {children}
       </body>
     </html>
