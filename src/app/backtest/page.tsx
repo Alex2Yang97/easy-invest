@@ -4,7 +4,11 @@ import { BacktestForm } from "@/components/BacktestForm";
 import { GrowthChart } from "@/components/GrowthChart";
 import { ShareButton } from "@/components/ShareButton";
 import { TransactionLog } from "@/components/TransactionLog";
-import { simulateDca, type DcaNextBuy } from "@/lib/dca";
+import {
+  simulateDca,
+  type DcaNextBuy,
+  type DcaSummary,
+} from "@/lib/dca";
 import {
   formatDate,
   formatMultiple,
@@ -16,12 +20,39 @@ import { t, type Locale } from "@/lib/i18n";
 import { getLocale } from "@/lib/locale.server";
 import { parseParams } from "@/lib/params";
 import { findPreset, presetName } from "@/lib/presets";
+import {
+  DEFAULT_STRATEGY,
+  STRATEGY_IDS,
+  type StrategyId,
+} from "@/lib/strategies";
 import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 3600;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function titleKeyFor(strategy: StrategyId): string {
+  if (strategy === "va") return "result.title.va";
+  if (strategy === "ma") return "result.title.ma";
+  if (strategy === "tp") return "result.title.tp";
+  return "result.title";
+}
+
+function buildUrl(
+  ticker: string,
+  start: string,
+  amount: number,
+  strategy: StrategyId,
+): string {
+  const q = new URLSearchParams({
+    ticker,
+    start,
+    amount: String(amount),
+  });
+  if (strategy !== DEFAULT_STRATEGY) q.set("strategy", strategy);
+  return `/backtest?${q.toString()}`;
+}
 
 export async function generateMetadata({
   searchParams,
@@ -32,11 +63,16 @@ export async function generateMetadata({
   const locale = await getLocale();
   const parsed = parseParams(sp);
   if (!parsed.ok) return { title: t(locale, "meta.title") };
-  const { ticker, start, amount } = parsed.data;
+  const { ticker, start, amount, strategy } = parsed.data;
   const amountStr = formatUSD(amount);
-  const ogUrl = `/api/og?ticker=${encodeURIComponent(
+  const ogParams = new URLSearchParams({
     ticker,
-  )}&start=${start}&amount=${amount}&lang=${locale}`;
+    start,
+    amount: String(amount),
+    lang: locale,
+  });
+  if (strategy !== DEFAULT_STRATEGY) ogParams.set("strategy", strategy);
+  const ogUrl = `/api/og?${ogParams.toString()}`;
   return {
     title: t(locale, "meta.backtest.title", {
       ticker,
@@ -81,7 +117,7 @@ export default async function BacktestPage({
       />
     );
   }
-  const { ticker, start, amount } = parsed.data;
+  const { ticker, start, amount, strategy } = parsed.data;
 
   const history = await fetchDailyHistory(ticker, start);
   if (!history.ok) {
@@ -93,11 +129,20 @@ export default async function BacktestPage({
         ticker={ticker}
         start={start}
         amount={amount}
+        strategy={strategy}
       />
     );
   }
 
-  const summary = simulateDca(history.points, amount, history.latestPrice);
+  const allSummaries: Record<StrategyId, DcaSummary> = {
+    vanilla: simulateDca(history.points, amount, history.latestPrice, "vanilla"),
+    va: simulateDca(history.points, amount, history.latestPrice, "va"),
+    ma: simulateDca(history.points, amount, history.latestPrice, "ma"),
+    tp: simulateDca(history.points, amount, history.latestPrice, "tp"),
+  };
+  const summary = allSummaries[strategy];
+  const vanillaSummary = strategy === "vanilla" ? null : allSummaries.vanilla;
+
   const preset = findPreset(ticker);
   const assetName = preset
     ? presetName(preset, locale)
@@ -126,17 +171,29 @@ export default async function BacktestPage({
             <span className="text-[11px] font-mono tabular tracking-wider text-muted bg-card border border-line rounded-md px-2 py-0.5">
               {ticker}
             </span>
+            {strategy !== DEFAULT_STRATEGY && (
+              <span className="text-[11px] tracking-wide text-accent bg-accent-soft/50 border border-accent/20 rounded-md px-2 py-0.5">
+                {t(locale, `strategy.${strategy}.name`)}
+              </span>
+            )}
             <span className="text-[13px] text-muted">
               {startLabel} → {endLabel}
             </span>
           </div>
           <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
-            {t(locale, "result.title", {
+            {t(locale, titleKeyFor(strategy), {
               date: startLabel,
               amount: formatUSD(amount),
               asset: assetName,
             })}
           </h1>
+          {strategy !== DEFAULT_STRATEGY && (
+            <p className="mt-2 text-[12.5px] text-muted leading-snug">
+              {t(locale, `strategy.${strategy}.detail`, {
+                amount: formatUSD(amount),
+              })}
+            </p>
+          )}
         </header>
 
         <section className="rounded-2xl border border-line bg-card p-6 sm:p-8 shadow-[0_1px_2px_rgba(0,0,0,0.02),0_8px_24px_-12px_rgba(0,0,0,0.08)]">
@@ -148,7 +205,7 @@ export default async function BacktestPage({
           >
             {formatUSD(summary.finalValue)}
           </div>
-          <div className="mt-3 flex items-baseline gap-2 text-[14px] tabular">
+          <div className="mt-3 flex items-baseline gap-2 text-[14px] tabular flex-wrap">
             <span className={`font-semibold ${accentClass}`}>
               {gainPositive ? "+" : ""}
               {formatUSD(summary.gain)}
@@ -163,6 +220,13 @@ export default async function BacktestPage({
             <Stat
               label={t(locale, "result.stat.invested")}
               value={formatUSD(summary.totalContributed)}
+              sub={
+                summary.totalRealized > 0
+                  ? t(locale, "result.stat.netInvested") +
+                    " " +
+                    formatUSD(summary.netInvested)
+                  : undefined
+              }
             />
             <Stat
               label={t(locale, "result.stat.shares")}
@@ -172,9 +236,13 @@ export default async function BacktestPage({
             <Stat
               label={t(locale, "result.stat.months")}
               value={`${summary.months}`}
-              sub={t(locale, "result.stat.monthsSub", {
-                years: (summary.months / 12).toFixed(1),
-              })}
+              sub={
+                summary.sellCount > 0
+                  ? t(locale, "result.stat.sells", { n: summary.sellCount })
+                  : t(locale, "result.stat.monthsSub", {
+                      years: (summary.months / 12).toFixed(1),
+                    })
+              }
             />
             <Stat
               label={t(locale, "result.stat.cagr")}
@@ -189,10 +257,24 @@ export default async function BacktestPage({
               daily={summary.daily}
               transactions={summary.transactions}
               gainPositive={gainPositive}
+              vanillaDaily={vanillaSummary?.daily}
             />
           </div>
-          <Legend locale={locale} />
+          <Legend
+            locale={locale}
+            hasSells={summary.sellCount > 0}
+            hasCompare={!!vanillaSummary}
+          />
         </section>
+
+        <ExploreStrategies
+          locale={locale}
+          currentStrategy={strategy}
+          summaries={allSummaries}
+          ticker={ticker}
+          start={start}
+          amount={amount}
+        />
 
         {summary.nextBuy && (
           <NextDcaCard
@@ -203,23 +285,6 @@ export default async function BacktestPage({
           />
         )}
 
-        <section className="mt-8 rounded-2xl border border-line bg-card p-5 sm:p-7">
-          <div className="flex items-baseline justify-between gap-3 mb-4">
-            <h2 className="text-[13px] font-semibold tracking-wide">
-              {t(locale, "result.txns.section")}
-            </h2>
-            <span className="text-[11px] text-muted tabular">
-              {t(locale, "result.txns.count", {
-                n: summary.transactions.length,
-              })}
-            </span>
-          </div>
-          <TransactionLog
-            locale={locale}
-            transactions={summary.transactions}
-          />
-        </section>
-
         <section className="mt-8 rounded-2xl border border-line bg-card/70 p-5 sm:p-7">
           <h2 className="text-[13px] font-semibold mb-4 tracking-wide">
             {t(locale, "result.tweakSection")}
@@ -229,7 +294,15 @@ export default async function BacktestPage({
             defaultTicker={ticker}
             defaultStart={start}
             defaultAmount={amount}
+            defaultStrategy={strategy}
             compact
+          />
+        </section>
+
+        <section className="mt-8">
+          <TransactionLog
+            locale={locale}
+            transactions={summary.transactions}
           />
         </section>
 
@@ -266,7 +339,15 @@ function Stat({
   );
 }
 
-function Legend({ locale }: { locale: Locale }) {
+function Legend({
+  locale,
+  hasSells,
+  hasCompare,
+}: {
+  locale: Locale;
+  hasSells: boolean;
+  hasCompare: boolean;
+}) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
       <span className="inline-flex items-center gap-1.5">
@@ -277,11 +358,106 @@ function Legend({ locale }: { locale: Locale }) {
         <span className="inline-block h-[2px] w-4 border-t-2 border-dashed border-muted" />
         {t(locale, "result.legend.invested")}
       </span>
+      {hasCompare && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-[2px] w-4 border-t-2 border-dotted border-muted" />
+          {t(locale, "result.legend.compare")}
+        </span>
+      )}
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block size-1.5 rounded-full bg-accent" />
         {t(locale, "result.legend.buy")}
       </span>
+      {hasSells && (
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block size-0 border-x-[4px] border-x-transparent border-b-[6px]"
+            style={{ borderBottomColor: "var(--loss)" }}
+          />
+          {t(locale, "result.legend.sell")}
+        </span>
+      )}
     </div>
+  );
+}
+
+function ExploreStrategies({
+  locale,
+  currentStrategy,
+  summaries,
+  ticker,
+  start,
+  amount,
+}: {
+  locale: Locale;
+  currentStrategy: StrategyId;
+  summaries: Record<StrategyId, DcaSummary>;
+  ticker: string;
+  start: string;
+  amount: number;
+}) {
+  const current = summaries[currentStrategy];
+  const others = STRATEGY_IDS.filter((id) => id !== currentStrategy);
+  return (
+    <section className="mt-8 rounded-2xl border border-line bg-card/40 p-5 sm:p-7">
+      <div className="mb-4">
+        <h2 className="text-[13px] font-semibold tracking-wide">
+          {t(locale, "explore.section")}
+        </h2>
+        <p className="mt-1 text-[11.5px] text-muted leading-snug">
+          {t(locale, "explore.subtitle")}
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {others.map((id) => {
+          const s = summaries[id];
+          const delta = s.finalValue - current.finalValue;
+          const deltaPct =
+            current.finalValue > 0
+              ? (delta / current.finalValue) * 100
+              : 0;
+          const tinyDiff = Math.abs(deltaPct) < 0.5;
+          const ahead = delta > 0;
+          const deltaText = tinyDiff
+            ? t(locale, "explore.delta.same")
+            : ahead
+              ? t(locale, "explore.delta.pos", {
+                  amount: formatUSD(Math.abs(delta)),
+                })
+              : t(locale, "explore.delta.neg", {
+                  amount: formatUSD(Math.abs(delta)),
+                });
+          const deltaColor = tinyDiff
+            ? "text-muted"
+            : ahead
+              ? "text-accent"
+              : "text-loss";
+          return (
+            <Link
+              key={id}
+              href={buildUrl(ticker, start, amount, id)}
+              className="group rounded-xl border border-line bg-card p-4 hover:border-foreground/40 transition flex flex-col gap-2"
+            >
+              <div className="text-[13px] font-semibold leading-tight">
+                {t(locale, `strategy.${id}.name`)}
+              </div>
+              <div className="text-[11px] text-muted leading-snug">
+                {t(locale, `strategy.${id}.short`)}
+              </div>
+              <div className="mt-1 text-xl font-bold tabular">
+                {formatUSD(s.finalValue)}
+              </div>
+              <div className={`text-[11px] tabular ${deltaColor}`}>
+                {deltaText}
+              </div>
+              <div className="mt-1 text-[11px] text-muted group-hover:text-foreground transition">
+                {t(locale, "explore.viewLink")}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -311,7 +487,7 @@ function NextDcaCard({
         <Stat label={t(locale, "next.estDate")} value={nextLabel} />
         <Stat
           label={t(locale, "next.amount")}
-          value={formatUSD(nextBuy.monthlyAmount)}
+          value={formatUSD(nextBuy.estimatedAmount)}
           sub={t(locale, "next.amountSub", { asset: assetName })}
         />
         <Stat
@@ -337,6 +513,7 @@ function ErrorView({
   ticker,
   start,
   amount,
+  strategy,
 }: {
   locale: Locale;
   title: string;
@@ -344,6 +521,7 @@ function ErrorView({
   ticker?: string;
   start?: string;
   amount?: number;
+  strategy?: StrategyId;
 }) {
   return (
     <div className="flex-1 flex flex-col">
@@ -370,6 +548,7 @@ function ErrorView({
             defaultTicker={ticker ?? "SPY"}
             defaultStart={start ?? "2015-01"}
             defaultAmount={amount ?? 500}
+            defaultStrategy={strategy ?? DEFAULT_STRATEGY}
             compact
           />
         </div>
