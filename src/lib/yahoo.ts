@@ -1,5 +1,6 @@
 import "server-only";
 import YahooFinance from "yahoo-finance2";
+import { alignDailySeries, type AssetSeries } from "./portfolio";
 
 const yf = new YahooFinance({
   suppressNotices: ["yahooSurvey", "ripHistorical"],
@@ -105,4 +106,77 @@ export async function fetchDailyHistory(
       errorParams: { msg: msg.slice(0, 120) },
     };
   }
+}
+
+export type PortfolioHistoryAssetMeta = {
+  ticker: string;
+  weight: number;
+  nameLong?: string;
+  latestPrice?: number;
+  latestDate?: string;
+  earliestDate: string;
+};
+
+export type PortfolioHistoryResult =
+  | {
+      ok: true;
+      series: AssetSeries[];
+      meta: PortfolioHistoryAssetMeta[];
+    }
+  | HistoryError;
+
+export async function fetchPortfolioHistory(
+  assets: { ticker: string; weight: number }[],
+  startMonth: string,
+): Promise<PortfolioHistoryResult> {
+  const results = await Promise.all(
+    assets.map((a) => fetchDailyHistory(a.ticker, startMonth)),
+  );
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (!r.ok) return r;
+  }
+
+  const okResults = results as Extract<HistoryResult, { ok: true }>[];
+
+  // Reject if any asset's earliest available date is later than startMonth
+  for (let i = 0; i < okResults.length; i++) {
+    const earliest = okResults[i].points[0]?.date ?? "";
+    if (earliest.slice(0, 7) > startMonth) {
+      return {
+        ok: false,
+        errorKey: "error.portfolio.startTooLate",
+        errorParams: {
+          ticker: okResults[i].ticker,
+          earliest: earliest.slice(0, 7),
+        },
+      };
+    }
+  }
+
+  const raw = okResults.map((r, i) => ({
+    ticker: r.ticker,
+    weight: assets[i].weight,
+    points: r.points,
+  }));
+  const series = alignDailySeries(raw);
+
+  if (series.length === 0 || series[0].points.length < 20) {
+    return {
+      ok: false,
+      errorKey: "error.portfolio.notEnoughOverlap",
+    };
+  }
+
+  const meta: PortfolioHistoryAssetMeta[] = okResults.map((r, i) => ({
+    ticker: r.ticker,
+    weight: assets[i].weight,
+    nameLong: r.nameLong,
+    latestPrice: r.latestPrice,
+    latestDate: r.latestDate,
+    earliestDate: r.points[0]?.date ?? "",
+  }));
+
+  return { ok: true, series, meta };
 }
