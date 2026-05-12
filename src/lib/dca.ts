@@ -1,3 +1,4 @@
+import { addMonth, firstWeekdayOf, ymOf } from "./dates";
 import {
   DEFAULT_STRATEGY,
   MA_CONFIG,
@@ -57,27 +58,6 @@ export type DcaSummary = {
   daily: DcaDailyPoint[];
   nextBuy: DcaNextBuy | null;
 };
-
-function ymOf(isoDay: string): string {
-  return isoDay.slice(0, 7);
-}
-
-function addMonth(yyyyMm: string): string {
-  const [y, m] = yyyyMm.split("-").map((s) => parseInt(s, 10));
-  const nm = m === 12 ? 1 : m + 1;
-  const ny = m === 12 ? y + 1 : y;
-  return `${ny}-${String(nm).padStart(2, "0")}`;
-}
-
-function firstWeekdayOf(yyyyMm: string): string {
-  const [y, m] = yyyyMm.split("-").map((s) => parseInt(s, 10));
-  const d = new Date(Date.UTC(y, m - 1, 1));
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${String(m).padStart(2, "0")}-${dd}`;
-}
 
 function rollingMean(points: DailyPoint[], window: number): (number | null)[] {
   const out: (number | null)[] = new Array(points.length).fill(null);

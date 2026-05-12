@@ -148,6 +148,57 @@ const zh: Dict = {
   "share.copied": "已复制",
   "share.shareTitle": "我的定投回测",
 
+  // home tabs
+  "home.tab.single": "单标的",
+  "home.tab.portfolio": "投资组合",
+  "home.tab.hint.single": "选一个标的，按月定额买入",
+  "home.tab.hint.portfolio":
+    "多标的按目标权重定投，新资金优先补低于目标的标的（从不卖出）",
+
+  // portfolio form
+  "portfolio.form.assets.label": "投资组合",
+  "portfolio.form.assets.help": "2–8 个标的，权重整数和必须 = 100",
+  "portfolio.form.assets.tickerPlaceholder": "代码",
+  "portfolio.form.assets.add": "+ 添加标的",
+  "portfolio.form.assets.remove": "删除",
+  "portfolio.form.weightOk": "合计 {sum}% ✓",
+  "portfolio.form.weightOff": "合计 {sum}%（需 = 100）",
+  "portfolio.form.weightDup": "标的不能重复",
+  "portfolio.form.submit.first": "看组合回测 →",
+  "portfolio.form.submit.compact": "重新计算",
+
+  // portfolio result
+  "portfolio.result.title":
+    "如果你从 {date} 起，每月投 {amount} 到这个组合…",
+  "portfolio.result.subtitle":
+    "{count} 个标的，新资金自动按目标权重再平衡（不卖出）",
+  "portfolio.stat.assets": "标的数",
+  "portfolio.legend.driftBuy":
+    "再平衡方式：每月新资金优先分配给低于目标权重的标的，从不卖出。",
+  "portfolio.weights.section": "目标 vs 实际权重",
+  "portfolio.weights.target": "目标",
+  "portfolio.weights.actual": "实际",
+  "portfolio.perAsset.section": "各标的细节",
+  "portfolio.perAsset.col.ticker": "标的",
+  "portfolio.perAsset.col.target": "目标",
+  "portfolio.perAsset.col.actual": "实际",
+  "portfolio.perAsset.col.shares": "份额",
+  "portfolio.perAsset.col.contributed": "投入",
+  "portfolio.perAsset.col.value": "价值",
+  "portfolio.perAsset.col.gain": "盈亏",
+  "portfolio.txns.col.ticker": "标的",
+  "portfolio.txns.col.amount": "金额",
+  "portfolio.next.total": "本月总投入",
+  "portfolio.next.allocAmount": "分配",
+  "portfolio.next.allocShares": "预计份额",
+  "portfolio.next.note":
+    "按 {dateLabel} 收盘价估算；实际成交以当日收盘为准。",
+
+  // portfolio meta
+  "portfolio.meta.title": "{count} 标的组合定投 · easy-invest",
+  "portfolio.meta.description":
+    "如果你从 {start} 起每月 {amount} 定投这个 {count} 标的组合，今天会有多少？",
+
   // errors
   "error.params.title": "参数错误",
   "error.fetch.title": "拉取数据失败",
@@ -160,6 +211,13 @@ const zh: Dict = {
   "error.params.ticker": "标的代码无效",
   "error.params.start": "起始月份格式应为 YYYY-MM",
   "error.params.amount": "金额必须是 1–1,000,000 之间的正数",
+  "error.params.assets": "标的格式错误，应为 TICKER:WEIGHT",
+  "error.params.assetsCount": "组合需要 2–8 个标的",
+  "error.params.assetsDup": "标的不能重复",
+  "error.params.weightSum": "权重必须是正整数且合计 = 100",
+  "error.portfolio.startTooLate":
+    "「{ticker}」最早数据从 {earliest} 起，请选更晚的起始月份或移除该标的",
+  "error.portfolio.notEnoughOverlap": "标的之间的历史重叠期不足",
 
   // back nav
   "nav.back": "easy-invest",
@@ -306,6 +364,54 @@ const en: Dict = {
   "share.copied": "Copied",
   "share.shareTitle": "My DCA backtest",
 
+  "home.tab.single": "Single asset",
+  "home.tab.portfolio": "Portfolio",
+  "home.tab.hint.single": "Pick one asset, fixed monthly buy",
+  "home.tab.hint.portfolio":
+    "Multiple assets at target weights; new cash drifts the portfolio back (never sells)",
+
+  "portfolio.form.assets.label": "Portfolio",
+  "portfolio.form.assets.help":
+    "2–8 assets, integer weights summing to exactly 100",
+  "portfolio.form.assets.tickerPlaceholder": "Ticker",
+  "portfolio.form.assets.add": "+ Add asset",
+  "portfolio.form.assets.remove": "Remove",
+  "portfolio.form.weightOk": "Total {sum}% ✓",
+  "portfolio.form.weightOff": "Total {sum}% (must = 100)",
+  "portfolio.form.weightDup": "Tickers must be unique",
+  "portfolio.form.submit.first": "See portfolio backtest →",
+  "portfolio.form.submit.compact": "Recompute",
+
+  "portfolio.result.title":
+    "If you had DCA'd {amount}/mo into this portfolio starting {date}…",
+  "portfolio.result.subtitle":
+    "{count} assets, drift-buy rebalancing (no sells)",
+  "portfolio.stat.assets": "Assets",
+  "portfolio.legend.driftBuy":
+    "Rebalancing: each month's contribution flows preferentially to underweight assets. Never sells.",
+  "portfolio.weights.section": "Target vs actual weights",
+  "portfolio.weights.target": "Target",
+  "portfolio.weights.actual": "Actual",
+  "portfolio.perAsset.section": "Per asset",
+  "portfolio.perAsset.col.ticker": "Ticker",
+  "portfolio.perAsset.col.target": "Target",
+  "portfolio.perAsset.col.actual": "Actual",
+  "portfolio.perAsset.col.shares": "Shares",
+  "portfolio.perAsset.col.contributed": "Bought",
+  "portfolio.perAsset.col.value": "Value",
+  "portfolio.perAsset.col.gain": "P&L",
+  "portfolio.txns.col.ticker": "Ticker",
+  "portfolio.txns.col.amount": "Amount",
+  "portfolio.next.total": "Month total",
+  "portfolio.next.allocAmount": "Allocation",
+  "portfolio.next.allocShares": "Est. shares",
+  "portfolio.next.note":
+    "Estimated from {dateLabel} close; actual fills at that day's close.",
+
+  "portfolio.meta.title": "{count}-asset portfolio · easy-invest",
+  "portfolio.meta.description":
+    "If you had DCA'd {amount}/mo into this {count}-asset portfolio since {start}, where would you be?",
+
   "error.params.title": "Invalid input",
   "error.fetch.title": "Couldn't fetch data",
   "error.tryAgain": "Try again",
@@ -318,6 +424,16 @@ const en: Dict = {
   "error.params.ticker": "Invalid ticker",
   "error.params.start": "Start month must be YYYY-MM",
   "error.params.amount": "Amount must be a positive number 1–1,000,000",
+  "error.params.assets":
+    "Asset format invalid; expected TICKER:WEIGHT pairs",
+  "error.params.assetsCount": "Portfolio requires 2–8 assets",
+  "error.params.assetsDup": "Tickers must be unique",
+  "error.params.weightSum":
+    "Weights must be positive integers summing to 100",
+  "error.portfolio.startTooLate":
+    "{ticker} data only starts {earliest} — pick a later start month or remove it",
+  "error.portfolio.notEnoughOverlap":
+    "Not enough overlapping history between assets",
 
   "nav.back": "easy-invest",
 

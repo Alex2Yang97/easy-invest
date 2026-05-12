@@ -1,4 +1,4 @@
-import { BacktestForm } from "@/components/BacktestForm";
+import { HomeForms } from "@/components/HomeForms";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/locale.server";
 import { PRESETS } from "@/lib/presets";
@@ -24,7 +24,7 @@ export default async function Home() {
         </header>
 
         <section className="rounded-2xl border border-line bg-card/70 backdrop-blur-sm p-5 sm:p-7 shadow-[0_1px_2px_rgba(0,0,0,0.02),0_8px_24px_-12px_rgba(0,0,0,0.08)]">
-          <BacktestForm locale={locale} />
+          <HomeForms locale={locale} />
         </section>
 
         <section className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px] text-muted">
