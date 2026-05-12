@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { t } from "@/lib/i18n";
@@ -72,6 +73,7 @@ export default async function RootLayout({
           </div>
         </header>
         {children}
+        <Analytics />
       </body>
     </html>
   );
