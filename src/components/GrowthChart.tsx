@@ -20,6 +20,16 @@ type Props = {
   daily: DcaDailyPoint[];
   transactions: DcaTransaction[];
   gainPositive: boolean;
+  vanillaDaily?: DcaDailyPoint[];
+};
+
+type Row = {
+  date: string;
+  value?: number;
+  contributed?: number;
+  vanillaValue?: number;
+  buyValue?: number;
+  sellValue?: number;
 };
 
 export function GrowthChart({
@@ -27,57 +37,54 @@ export function GrowthChart({
   daily,
   transactions,
   gainPositive,
+  vanillaDaily,
 }: Props) {
   const stride = Math.max(1, Math.floor(daily.length / 600));
-  const sampled: Array<{
-    date: string;
-    value: number;
-    contributed: number;
-  }> = [];
-  for (let i = 0; i < daily.length; i += stride) {
-    const p = daily[i];
-    sampled.push({
-      date: p.date,
-      value: Math.round(p.value),
-      contributed: Math.round(p.contributed),
-    });
-  }
-  const lastDaily = daily[daily.length - 1];
-  if (sampled[sampled.length - 1]?.date !== lastDaily.date) {
-    sampled.push({
-      date: lastDaily.date,
-      value: Math.round(lastDaily.value),
-      contributed: Math.round(lastDaily.contributed),
-    });
-  }
+  const byDate = new Map<string, Row>();
+  const merged: Row[] = [];
 
-  const buys = transactions.map((tx) => ({
-    date: tx.date,
-    buyValue: Math.round(tx.valueAfter),
-  }));
-
-  const merged: Array<{
-    date: string;
-    value?: number;
-    contributed?: number;
-    buyValue?: number;
-  }> = [];
-  const byDate = new Map<string, (typeof merged)[number]>();
-  for (const s of sampled) {
-    const row = { date: s.date, value: s.value, contributed: s.contributed };
-    byDate.set(s.date, row);
-    merged.push(row);
-  }
-  for (const b of buys) {
-    const existing = byDate.get(b.date);
-    if (existing) {
-      existing.buyValue = b.buyValue;
-    } else {
-      const row = { date: b.date, buyValue: b.buyValue };
-      byDate.set(b.date, row);
+  function upsert(date: string): Row {
+    let row = byDate.get(date);
+    if (!row) {
+      row = { date };
+      byDate.set(date, row);
       merged.push(row);
     }
+    return row;
   }
+
+  for (let i = 0; i < daily.length; i += stride) {
+    const p = daily[i];
+    const row = upsert(p.date);
+    row.value = Math.round(p.value);
+    row.contributed = Math.round(p.contributed);
+  }
+  const lastDaily = daily[daily.length - 1];
+  const lastRow = upsert(lastDaily.date);
+  lastRow.value = Math.round(lastDaily.value);
+  lastRow.contributed = Math.round(lastDaily.contributed);
+
+  if (vanillaDaily && vanillaDaily.length > 0) {
+    const vStride = Math.max(1, Math.floor(vanillaDaily.length / 600));
+    for (let i = 0; i < vanillaDaily.length; i += vStride) {
+      const p = vanillaDaily[i];
+      const row = upsert(p.date);
+      row.vanillaValue = Math.round(p.value);
+    }
+    const vLast = vanillaDaily[vanillaDaily.length - 1];
+    const vLastRow = upsert(vLast.date);
+    vLastRow.vanillaValue = Math.round(vLast.value);
+  }
+
+  for (const tx of transactions) {
+    const row = upsert(tx.date);
+    if (tx.kind === "buy") {
+      row.buyValue = Math.round(tx.valueAfter);
+    } else {
+      row.sellValue = Math.round(tx.valueAfter);
+    }
+  }
+
   merged.sort((a, b) => a.date.localeCompare(b.date));
 
   const accent = gainPositive ? "#047857" : "#be123c";
@@ -130,13 +137,26 @@ export function GrowthChart({
             isAnimationActive={false}
             connectNulls
           />
+          {vanillaDaily && (
+            <Line
+              type="monotone"
+              dataKey="vanillaValue"
+              stroke="currentColor"
+              strokeOpacity={0.55}
+              strokeDasharray="2 3"
+              strokeWidth={1.5}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          )}
           <Line
             type="monotone"
             dataKey="contributed"
             stroke="currentColor"
-            strokeOpacity={0.45}
+            strokeOpacity={0.35}
             strokeDasharray="4 4"
-            strokeWidth={1.5}
+            strokeWidth={1.25}
             dot={false}
             isAnimationActive={false}
             connectNulls
@@ -145,6 +165,12 @@ export function GrowthChart({
             dataKey="buyValue"
             fill={accent}
             shape="circle"
+            isAnimationActive={false}
+          />
+          <Scatter
+            dataKey="sellValue"
+            fill="#be123c"
+            shape="triangle"
             isAnimationActive={false}
           />
         </ComposedChart>
@@ -167,17 +193,35 @@ function ChartTooltip({
   if (!active || !payload || payload.length === 0) return null;
   const value = payload.find((p) => p.dataKey === "value")?.value;
   const contributed = payload.find((p) => p.dataKey === "contributed")?.value;
+  const vanillaValue = payload.find(
+    (p) => p.dataKey === "vanillaValue",
+  )?.value;
   const buy = payload.find((p) => p.dataKey === "buyValue")?.value;
+  const sell = payload.find((p) => p.dataKey === "sellValue")?.value;
   const dateLabel = label ? formatDate(label, locale) : "";
+
   if (value == null || contributed == null) {
     if (buy != null && dateLabel) {
       return (
         <div className="rounded-lg border border-line bg-card px-3 py-2 text-xs shadow-sm tabular">
           <div className="font-semibold mb-1">{dateLabel}</div>
-          <Row
+          <TooltipRow
             label={t(locale, "chart.tooltip.buyDay")}
             value={formatUSD(buy)}
             bold
+          />
+        </div>
+      );
+    }
+    if (sell != null && dateLabel) {
+      return (
+        <div className="rounded-lg border border-line bg-card px-3 py-2 text-xs shadow-sm tabular">
+          <div className="font-semibold mb-1">{dateLabel}</div>
+          <TooltipRow
+            label={t(locale, "chart.tooltip.sellDay")}
+            value={formatUSD(sell)}
+            bold
+            color="var(--loss)"
           />
         </div>
       );
@@ -189,33 +233,47 @@ function ChartTooltip({
   return (
     <div className="rounded-lg border border-line bg-card px-3 py-2 text-xs shadow-sm tabular">
       <div className="font-semibold mb-1">{dateLabel}</div>
-      <Row
+      <TooltipRow
         label={t(locale, "chart.tooltip.value")}
         value={formatUSD(value)}
         bold
       />
-      <Row
+      <TooltipRow
         label={t(locale, "chart.tooltip.invested")}
         value={formatUSD(contributed)}
         muted
       />
-      <Row
+      {vanillaValue != null && (
+        <TooltipRow
+          label={t(locale, "chart.tooltip.compare")}
+          value={formatUSD(vanillaValue)}
+          muted
+        />
+      )}
+      <TooltipRow
         label={t(locale, "chart.tooltip.pnl")}
         value={`${formatUSD(gain)} (${gain >= 0 ? "+" : ""}${(gainPct * 100).toFixed(1)}%)`}
         color={gain >= 0 ? "var(--accent)" : "var(--loss)"}
       />
       {buy != null && (
-        <Row
+        <TooltipRow
           label={t(locale, "chart.tooltip.bought")}
           value={t(locale, "chart.tooltip.bought.yes")}
           muted
+        />
+      )}
+      {sell != null && (
+        <TooltipRow
+          label={t(locale, "chart.tooltip.sellDay")}
+          value={t(locale, "chart.tooltip.bought.yes")}
+          color="var(--loss)"
         />
       )}
     </div>
   );
 }
 
-function Row({
+function TooltipRow({
   label,
   value,
   bold,

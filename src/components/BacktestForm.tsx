@@ -2,18 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import {
-  formatMonthOption,
-  formatYearOption,
-} from "@/lib/format";
+import { formatMonthOption, formatYearOption } from "@/lib/format";
 import { t, type Locale } from "@/lib/i18n";
 import { PRESETS, presetDesc, presetName } from "@/lib/presets";
+import { DEFAULT_STRATEGY, type StrategyId } from "@/lib/strategies";
 
 type Props = {
   locale: Locale;
   defaultTicker?: string;
   defaultStart?: string;
   defaultAmount?: number;
+  defaultStrategy?: StrategyId;
   compact?: boolean;
 };
 
@@ -24,6 +23,7 @@ export function BacktestForm({
   defaultTicker = "SPY",
   defaultStart = "2015-01",
   defaultAmount = 500,
+  defaultStrategy = DEFAULT_STRATEGY,
   compact = false,
 }: Props) {
   const router = useRouter();
@@ -47,6 +47,9 @@ export function BacktestForm({
       start,
       amount: String(amt),
     });
+    if (defaultStrategy !== DEFAULT_STRATEGY) {
+      q.set("strategy", defaultStrategy);
+    }
     startTransition(() => {
       router.push(`/backtest?${q.toString()}`);
     });

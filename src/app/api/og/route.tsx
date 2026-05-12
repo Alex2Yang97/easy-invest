@@ -4,6 +4,7 @@ import { formatPercent, formatUSD } from "@/lib/format";
 import { isLocale, t, DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import { parseParams } from "@/lib/params";
 import { findPreset, presetName } from "@/lib/presets";
+import { DEFAULT_STRATEGY } from "@/lib/strategies";
 import { fetchDailyHistory } from "@/lib/yahoo";
 
 export const runtime = "nodejs";
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const { ticker, start, amount } = parsed.data;
+  const { ticker, start, amount, strategy } = parsed.data;
   const history = await fetchDailyHistory(ticker, start);
   if (!history.ok) {
     return errorCard(
@@ -33,7 +34,12 @@ export async function GET(req: Request) {
     );
   }
 
-  const summary = simulateDca(history.points, amount, history.latestPrice);
+  const summary = simulateDca(
+    history.points,
+    amount,
+    history.latestPrice,
+    strategy,
+  );
   const preset = findPreset(ticker);
   const assetName = preset
     ? presetName(preset, locale)
@@ -42,6 +48,8 @@ export async function GET(req: Request) {
   const accent = gainPositive ? "#047857" : "#be123c";
 
   const tagline = t(locale, "brand.tagline");
+  const strategyName = t(locale, `strategy.${strategy}.name`);
+  const isVanilla = strategy === DEFAULT_STRATEGY;
   const headline =
     locale === "zh"
       ? `每月 ${formatUSD(amount)} 投 ${assetName}，自 ${start}`
@@ -88,18 +96,35 @@ export async function GET(req: Request) {
               {`easy-invest · ${tagline}`}
             </div>
           </div>
-          <div
-            style={{
-              fontSize: 22,
-              color: "#0c111c",
-              fontWeight: 600,
-              border: "1px solid #e6e3d9",
-              padding: "6px 14px",
-              borderRadius: 10,
-              background: "#ffffff",
-            }}
-          >
-            {ticker}
+          <div style={{ display: "flex", gap: 10 }}>
+            {!isVanilla && (
+              <div
+                style={{
+                  fontSize: 20,
+                  color: accent,
+                  fontWeight: 600,
+                  border: `1px solid ${accent}33`,
+                  background: `${accent}14`,
+                  padding: "6px 14px",
+                  borderRadius: 10,
+                }}
+              >
+                {strategyName}
+              </div>
+            )}
+            <div
+              style={{
+                fontSize: 22,
+                color: "#0c111c",
+                fontWeight: 600,
+                border: "1px solid #e6e3d9",
+                padding: "6px 14px",
+                borderRadius: 10,
+                background: "#ffffff",
+              }}
+            >
+              {ticker}
+            </div>
           </div>
         </div>
 
